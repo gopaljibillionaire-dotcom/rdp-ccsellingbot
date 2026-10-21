@@ -48,6 +48,7 @@ users_col = db["users"]
 products_col = db["products"]
 orders_col = db["orders"]
 transactions_col = db["transactions"]
+categories_col = db["categories"]
 
 # -------------------------------------------------------------------
 # Bot & Dispatcher Setup
@@ -64,16 +65,17 @@ dp.include_router(router)
 # FSM States
 # -------------------------------------------------------------------
 class AdminStates(StatesGroup):
+    waiting_for_category_name = State()
     waiting_for_product_name = State()
-    waiting_for_product_category = State()
     waiting_for_product_price = State()
     waiting_for_product_stock = State()
+    waiting_for_broadcast_message = State()
 
 class DepositStates(StatesGroup):
     waiting_for_amount = State()
 
 # -------------------------------------------------------------------
-# Helper Keyboards matching your Layout
+# Helper Keyboards & Custom Emojis (from config)
 # -------------------------------------------------------------------
 def get_custom_emoji_btn(text: str, callback_data: str, emoji_key: str, style: str = "primary") -> InlineKeyboardButton:
     return InlineKeyboardButton(
@@ -84,21 +86,28 @@ def get_custom_emoji_btn(text: str, callback_data: str, emoji_key: str, style: s
     )
 
 def main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    # Using emoji IDs from config for buttons where applicable
+    thunder_emoji = config.EMOJI.get("thunder")
+    bag_emoji = config.EMOJI.get("bag")
+    wallet_emoji = config.EMOJI.get("wallet")
+    profile_emoji = config.EMOJI.get("profile")
+    support_emoji = config.EMOJI.get("support")
+    fire_emoji = config.EMOJI.get("fire")
+
     buttons = [
         [
-            InlineKeyboardButton(text="🛒 Store", callback_data="shop", style="primary")
+            InlineKeyboardButton(text="🛒 Store", callback_data="shop", custom_emoji_id=bag_emoji, style="primary")
         ],
         [
-            InlineKeyboardButton(text="🛍️ My Purchases", callback_data="my_orders", style="primary"),
-            InlineKeyboardButton(text="🟠 Wallet", callback_data="wallet", style="primary"),
+            InlineKeyboardButton(text="🛍️ My Purchases", callback_data="my_orders", custom_emoji_id=fire_emoji, style="primary"),
+            InlineKeyboardButton(text="🟠 Wallet", callback_data="wallet", custom_emoji_id=wallet_emoji, style="primary"),
         ],
         [
-            InlineKeyboardButton(text="🎁 Refer & Earn", callback_data="referral", style="primary"),
-            InlineKeyboardButton(text="👤 Profile", callback_data="profile", style="primary"),
+            InlineKeyboardButton(text="👤 Profile", callback_data="profile", custom_emoji_id=profile_emoji, style="primary"),
+            InlineKeyboardButton(text="💬 Support", callback_data="support", custom_emoji_id=support_emoji, style="primary"),
         ],
         [
-            InlineKeyboardButton(text="💬 Support", callback_data="support", style="primary"),
-            InlineKeyboardButton(text="💻 Developer", callback_data="developer", style="primary"),
+            InlineKeyboardButton(text="💻 Developer", callback_data="developer", custom_emoji_id=thunder_emoji, style="primary"),
         ],
         [
             InlineKeyboardButton(text="💀 Join our Channel", url=getattr(config, "CHANNEL_URL", "https://t.me/OneWayStoreChannel"))
@@ -106,7 +115,7 @@ def main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     ]
     if user_id in config.ADMIN_IDS:
         buttons.append([
-            InlineKeyboardButton(text="⚡ Admin Control Panel", callback_data="admin_panel", style="danger")
+            InlineKeyboardButton(text="⚡ Admin Control Panel", callback_data="admin_panel", custom_emoji_id=thunder_emoji, style="danger")
         ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -121,7 +130,6 @@ async def get_or_create_user(user_id: int, username: Optional[str], full_name: s
             "username": username,
             "full_name": full_name,
             "balance": 0.0,
-            "referred_by": None,
             "created_at": datetime.utcnow()
         }
         await users_col.insert_one(user)
@@ -131,6 +139,13 @@ async def get_or_create_user(user_id: int, username: Optional[str], full_name: s
             {"$set": {"username": username, "full_name": full_name}}
         )
     return user
+
+async def notify_admins(text: str):
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception as e:
+            logger.error(f"Failed to notify admin {admin_id}: {e}")
 
 # -------------------------------------------------------------------
 # User Handlers & Welcome Screen
@@ -146,9 +161,10 @@ async def cmd_start(message: Message, state: FSMContext):
     
     await get_or_create_user(user_id, username, full_name)
     
+    thunder = config.EMOJI.get("thunder", "")
     caption = (
         f"👋 Hii @{username if username else full_name}, Welcome to <b>One Way Store</b>\n\n"
-        f"<blockquote>Your one stop solution for AI & OTT Subscriptions 💀</blockquote>\n\n"
+        f"<blockquote>Your one stop solution for AI & OTT Subscriptions <emoji id='{thunder}'>💀</emoji></blockquote>\n\n"
         f"Use the buttons below to navigate 👇"
     )
     
@@ -168,9 +184,10 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
     username = callback.from_user.username
     full_name = callback.from_user.full_name
     
+    thunder = config.EMOJI.get("thunder", "")
     caption = (
         f"👋 Hii @{username if username else full_name}, Welcome to <b>One Way Store</b>\n\n"
-        f"<blockquote>Your one stop solution for AI & OTT Subscriptions 💀</blockquote>\n\n"
+        f"<blockquote>Your one stop solution for AI & OTT Subscriptions <emoji id='{thunder}'>💀</emoji></blockquote>\n\n"
         f"Use the buttons below to navigate 👇"
     )
     
@@ -191,6 +208,7 @@ async def cb_profile(callback: CallbackQuery):
         full_name=callback.from_user.full_name
     )
     purchases_count = await orders_col.count_documents({"user_id": callback.from_user.id})
+    money_emoji = config.EMOJI.get("money")
     
     text = (
         f"<b>👤 User Profile</b>\n\n"
@@ -201,7 +219,7 @@ async def cb_profile(callback: CallbackQuery):
         f"<b>📦 Total Purchases:</b> <code>{purchases_count}</code>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🟠 Add Funds / Wallet", callback_data="wallet", style="success")],
+        [InlineKeyboardButton(text="🟠 Add Funds / Wallet", callback_data="wallet", custom_emoji_id=money_emoji, style="success")],
         [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
@@ -210,28 +228,14 @@ async def cb_profile(callback: CallbackQuery):
 @router.callback_query(F.data == "wallet")
 async def cb_wallet(callback: CallbackQuery):
     user = await get_or_create_user(callback.from_user.id, callback.from_user.username, callback.from_user.full_name)
+    wallet_emoji = config.EMOJI.get("wallet")
     text = (
         f"<b>🟠 My Wallet</b>\n\n"
         f"Current Balance: <code>${user.get('balance', 0.0):.2f}</code>\n\n"
         f"Deposit funds instantly via cryptocurrency (OxaPay auto-verification)."
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Deposit Funds", callback_data="deposit", style="success")],
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")]
-    ])
-    await callback.message.edit_text(text, reply_markup=kb)
-    await callback.answer()
-
-@router.callback_query(F.data == "referral")
-async def cb_referral(callback: CallbackQuery):
-    bot_info = await bot.get_me()
-    ref_link = f"https://t.me/{bot_info.username}?start=ref_{callback.from_user.id}"
-    text = (
-        f"<b>🎁 Refer & Earn Program</b>\n\n"
-        f"Invite your friends and earn rewards when they top up their wallet!\n\n"
-        f"Your Referral Link:\n<code>{ref_link}</code>"
-    )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Deposit Funds", callback_data="deposit", custom_emoji_id=wallet_emoji, style="success")],
         [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
@@ -239,6 +243,7 @@ async def cb_referral(callback: CallbackQuery):
 
 @router.callback_query(F.data == "support")
 async def cb_support(callback: CallbackQuery):
+    support_emoji = config.EMOJI.get("support")
     text = (
         f"<b>💬 Customer Support</b>\n\n"
         f"Facing issues with activation or deposits?\n"
@@ -252,13 +257,14 @@ async def cb_support(callback: CallbackQuery):
 
 @router.callback_query(F.data == "developer")
 async def cb_developer(callback: CallbackQuery):
+    thunder_emoji = config.EMOJI.get("thunder")
     text = (
         f"<b>💻 Developer Info</b>\n\n"
-        f"Bot designed & built for <b>One Way Store</b>.\n"
+        f"Bot designed & built for <b>One Way Store</b> by <b>@Gopalji369</b>.\n"
         f"Powered by Python, Aiogram & MongoDB."
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")]
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", custom_emoji_id=thunder_emoji, style="danger")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -268,19 +274,24 @@ async def cb_developer(callback: CallbackQuery):
 # -------------------------------------------------------------------
 @router.callback_query(F.data == "shop")
 async def cb_shop(callback: CallbackQuery):
-    categories = await products_col.distinct("category")
+    categories = await categories_col.distinct("name")
+    if not categories:
+        # Fallback to product categories if categories collection is empty
+        categories = await products_col.distinct("category")
+
     if not categories:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")]
         ])
-        await callback.message.edit_text("<b>🛒 Store Catalogue</b>\n\nNo products available right now. Check back soon!", reply_markup=kb)
+        await callback.message.edit_text("<b>🛒 Store Catalogue</b>\n\nNo categories or products available right now. Check back soon!", reply_markup=kb)
         await callback.answer()
         return
 
+    bag_emoji = config.EMOJI.get("bag")
     buttons = []
     for cat in categories:
         buttons.append([
-            InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"cat_{cat}", style="primary")
+            InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"cat_{cat}", custom_emoji_id=bag_emoji, style="primary")
         ])
     buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")])
 
@@ -303,12 +314,13 @@ async def cb_category(callback: CallbackQuery):
         await callback.answer("No products found in this category.", show_alert=True)
         return
 
+    buy_emoji = config.EMOJI.get("buy")
     buttons = []
     for p in products:
         stock_count = len(p.get("stock", []))
         btn_text = f"📦 {p['name']} - ${p['price']:.2f} ({stock_count} in stock)"
         buttons.append([
-            InlineKeyboardButton(text=btn_text, callback_data=f"prod_{str(p['_id'])}", style="primary")
+            InlineKeyboardButton(text=btn_text, callback_data=f"prod_{str(p['_id'])}", custom_emoji_id=buy_emoji, style="primary")
         ])
     buttons.append([InlineKeyboardButton(text="🔙 Back to Store", callback_data="shop", style="danger")])
 
@@ -330,18 +342,21 @@ async def cb_product_view(callback: CallbackQuery):
         return
 
     stock_count = len(product.get("stock", []))
+    fire_emoji = config.EMOJI.get("fire")
+    buy_emoji = config.EMOJI.get("buy")
+
     text = (
         f"<b>🛒 {product['name']}</b>\n\n"
         f"📁 <b>Category:</b> {product['category']}\n"
         f"💵 <b>Price:</b> <code>${product['price']:.2f}</code>\n"
         f"📦 <b>Available Stock:</b> <code>{stock_count}</code>\n\n"
-        f"🔥 <i>Stock is limited — grab yours before it's gone!</i> 🔥"
+        f"<emoji id='{fire_emoji}'>🔥</emoji> <i>Stock is limited — grab yours before it's gone!</i>"
     )
 
     buttons = []
     if stock_count > 0:
         buttons.append([
-            InlineKeyboardButton(text=f"🛒 Buy Now (${product['price']:.2f})", callback_data=f"buy_{str(product['_id'])}", style="success")
+            InlineKeyboardButton(text=f"🛒 Buy Now (${product['price']:.2f})", callback_data=f"buy_{str(product['_id'])}", custom_emoji_id=buy_emoji, style="success")
         ])
     buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data=f"cat_{product['category']}", style="danger")])
 
@@ -353,6 +368,7 @@ async def cb_buy_product(callback: CallbackQuery):
     from bson.objectid import ObjectId
     prod_id = callback.data.split("buy_")[1]
     user_id = callback.from_user.id
+    username = callback.from_user.username or callback.from_user.full_name
 
     try:
         product = await products_col.find_one({"_id": ObjectId(prod_id)})
@@ -393,6 +409,17 @@ async def cb_buy_product(callback: CallbackQuery):
         "created_at": datetime.utcnow()
     }
     await orders_col.insert_one(order)
+
+    # Notify admins about the user activity/purchase
+    tick_emoji = config.EMOJI.get("tick", "")
+    await notify_admins(
+        f"🚨 <b>New Purchase Alert!</b>\n\n"
+        f"👤 <b>User:</b> @{username} (<code>{user_id}</code>)\n"
+        f"📦 <b>Product:</b> {product['name']}\n"
+        f"📁 <b>Category:</b> {product['category']}\n"
+        f"💵 <b>Paid:</b> ${product['price']:.2f}\n"
+        f"<emoji id='{tick_emoji}'>✅</emoji> <i>Stock delivered automatically.</i>"
+    )
 
     success_text = (
         f"<b>✅ Purchase Successful!</b>\n\n"
@@ -437,7 +464,7 @@ async def cb_my_orders(callback: CallbackQuery):
     await callback.answer()
 
 # -------------------------------------------------------------------
-# OxaPay Crypto Deposit & Auto-Verification Flow with Check Payment
+# OxaPay Crypto Deposit & Auto-Verification Flow
 # -------------------------------------------------------------------
 @router.callback_query(F.data == "deposit")
 async def cb_deposit(callback: CallbackQuery, state: FSMContext):
@@ -495,6 +522,7 @@ async def process_deposit_amount(message: Message, state: FSMContext):
         await transactions_col.insert_one({
             "track_id": track_id,
             "user_id": message.from_user.id,
+            "username": message.from_user.username or message.from_user.full_name,
             "amount": amount,
             "status": "pending",
             "created_at": datetime.utcnow()
@@ -530,7 +558,6 @@ async def cb_check_payment(callback: CallbackQuery):
         await callback.answer("✅ Payment is already verified and credited!", show_alert=True)
         return
 
-    # Verify transaction status via OxaPay Inquiry API or In-memory check
     payload = {
         "merchant": config.OXAPAY_MERCHANT_API_KEY,
         "trackId": track_id
@@ -545,8 +572,6 @@ async def cb_check_payment(callback: CallbackQuery):
             await callback.answer("Failed to check status with payment gateway.", show_alert=True)
             return
 
-    status = res.get("status") # depending on oxapay inquiry response structure (e.g., 'Paid' or status code)
-    # Alternatively check via status code / status string
     is_paid = (res.get("result") == 100 and str(res.get("status")).lower() in ["paid", "complete", "completed", "1"]) or (res.get("payStatus") == 2)
 
     if is_paid or res.get("status") == "Paid":
@@ -558,6 +583,14 @@ async def cb_check_payment(callback: CallbackQuery):
             {"user_id": tx["user_id"]},
             {"$inc": {"balance": float(tx["amount"])}}
         )
+
+        # Notify admin of top-up wallet activity
+        await notify_admins(
+            f"🟠 <b>Wallet Topup Successful!</b>\n\n"
+            f"👤 <b>User:</b> @{tx.get('username')} (<code>{tx['user_id']}</code>)\n"
+            f"💵 <b>Amount Credited:</b> ${float(tx['amount']):.2f}"
+        )
+
         await callback.message.edit_text(
             f"<b>✅ Payment Verified Successfully!</b>\n\nYour wallet has been credited with <b>${float(tx['amount']):.2f}</b>.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -568,7 +601,6 @@ async def cb_check_payment(callback: CallbackQuery):
     else:
         await callback.answer("⏳ Payment not detected yet. Please complete the payment first.", show_alert=True)
 
-# OxaPay Webhook Handler for automated callbacks
 async def oxapay_callback_handler(request: web.Request) -> web.Response:
     try:
         data = await request.post()
@@ -591,6 +623,11 @@ async def oxapay_callback_handler(request: web.Request) -> web.Response:
                 {"user_id": tx["user_id"]},
                 {"$inc": {"balance": float(tx["amount"])}}
             )
+            await notify_admins(
+                f"🟠 <b>Wallet Topup Successful (Webhook)!</b>\n\n"
+                f"👤 <b>User:</b> @{tx.get('username')} (<code>{tx['user_id']}</code>)\n"
+                f"💵 <b>Amount Credited:</b> ${float(tx['amount']):.2f}"
+            )
             try:
                 await bot.send_message(
                     chat_id=tx["user_id"],
@@ -602,7 +639,7 @@ async def oxapay_callback_handler(request: web.Request) -> web.Response:
     return web.Response(text="ok", status=200)
 
 # -------------------------------------------------------------------
-# Admin Panel Handlers
+# Admin Control Panel Handlers
 # -------------------------------------------------------------------
 @router.callback_query(F.data == "admin_panel")
 async def cb_admin_panel(callback: CallbackQuery):
@@ -610,42 +647,91 @@ async def cb_admin_panel(callback: CallbackQuery):
         await callback.answer("Unauthorized!", show_alert=True)
         return
 
-    text = "<b>⚡ Admin Control Panel</b>\nManage store products, stock, and view metrics."
+    thunder_emoji = config.EMOJI.get("thunder")
+    text = "<b>⚡ Admin Control Panel</b>\nManage store categories, products, stock, broadcast, and database."
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Add Product", callback_data="admin_add_product", style="success")],
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")]
+        [InlineKeyboardButton(text="📁 Add Category", callback_data="admin_add_category", style="success"),
+         InlineKeyboardButton(text="➕ Add Product", callback_data="admin_add_product", style="success")],
+        [InlineKeyboardButton(text="📢 All User Broadcast", callback_data="admin_broadcast", style="primary"),
+         InlineKeyboardButton(text="👥 See User Activity", callback_data="admin_user_activity", style="primary")],
+        [InlineKeyboardButton(text="🗑️ Delete Single/Multi Product", callback_data="admin_delete_products", style="danger"),
+         InlineKeyboardButton(text="⚠️ Delete Entire Database", callback_data="admin_delete_db", style="danger")],
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", custom_emoji_id=thunder_emoji, style="danger")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
+# --- Add Category Flow ---
+@router.callback_query(F.data == "admin_add_category")
+async def cb_admin_add_category(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+    await state.set_state(AdminStates.waiting_for_category_name)
+    await callback.message.edit_text("<b>📁 Enter Category Name:</b>")
+    await callback.answer()
+
+@router.message(AdminStates.waiting_for_category_name)
+async def process_admin_category_name(message: Message, state: FSMContext):
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+    cat_name = message.text.strip()
+    await state.clear()
+    
+    await categories_col.update_one(
+        {"name": cat_name},
+        {"$set": {"name": cat_name, "created_at": datetime.utcnow()}},
+        upsert=True
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
+    ])
+    await message.answer(f"<b>✅ Category '{cat_name}' added successfully!</b>", reply_markup=kb)
+
+# --- Add Product Flow (Category -> Name -> Price -> Stock/Details) ---
 @router.callback_query(F.data == "admin_add_product")
-async def cb_admin_add_product(callback: CallbackQuery, state: FSMContext):
+async def cb_admin_add_product(callback: CallbackQuery):
     if callback.from_user.id not in config.ADMIN_IDS:
         await callback.answer("Unauthorized!", show_alert=True)
         return
 
+    categories = await categories_col.distinct("name")
+    if not categories:
+        categories = await products_col.distinct("category")
+
+    if not categories:
+        await callback.answer("Please add a Category first before adding products!", show_alert=True)
+        return
+
+    buttons = []
+    for cat in categories:
+        buttons.append([InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"admcat_{cat}", style="primary")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel", style="danger")])
+
+    await callback.message.edit_text("<b>Select the category where you want to add the product:</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("admcat_"))
+async def cb_admin_select_category(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+    category = callback.data.split("admcat_")[1]
+    await state.update_data(category=category)
     await state.set_state(AdminStates.waiting_for_product_name)
-    await callback.message.edit_text("<b>Step 1/4:</b> Enter Product Name:")
+    await callback.message.edit_text(f"<b>Selected Category:</b> {category}\n\n<b>Now enter the Product Name:</b>")
     await callback.answer()
 
 @router.message(AdminStates.waiting_for_product_name)
-async def process_admin_name(message: Message, state: FSMContext):
+async def process_admin_product_name(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         return
     await state.update_data(name=message.text.strip())
-    await state.set_state(AdminStates.waiting_for_product_category)
-    await message.answer("<b>Step 2/4:</b> Enter Product Category (e.g., Canva Pro, Netflix, AI Tools):")
-
-@router.message(AdminStates.waiting_for_product_category)
-async def process_admin_category(message: Message, state: FSMContext):
-    if message.from_user.id not in config.ADMIN_IDS:
-        return
-    await state.update_data(category=message.text.strip())
     await state.set_state(AdminStates.waiting_for_product_price)
-    await message.answer("<b>Step 3/4:</b> Enter Product Price in USD (e.g. 4.99):")
+    await message.answer("<b>Now enter the USD Price (e.g. <code>4.99</code>):</b>")
 
 @router.message(AdminStates.waiting_for_product_price)
-async def process_admin_price(message: Message, state: FSMContext):
+async def process_admin_product_price(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         return
     try:
@@ -653,15 +739,15 @@ async def process_admin_price(message: Message, state: FSMContext):
         if price < 0:
             raise ValueError()
     except ValueError:
-        await message.answer("Please enter a valid price (e.g. 4.99).")
+        await message.answer("Please enter a valid USD price (e.g. 4.99).")
         return
 
     await state.update_data(price=price)
     await state.set_state(AdminStates.waiting_for_product_stock)
-    await message.answer("<b>Step 4/4:</b> Send stock items/accounts (one item per line):")
+    await message.answer("<b>Now enter stock / details (one item per line). This will be given to the user after successful payment:</b>")
 
 @router.message(AdminStates.waiting_for_product_stock)
-async def process_admin_stock(message: Message, state: FSMContext):
+async def process_admin_product_stock(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         return
 
@@ -686,9 +772,152 @@ async def process_admin_stock(message: Message, state: FSMContext):
         f"<b>Name:</b> {data['name']}\n"
         f"<b>Category:</b> {data['category']}\n"
         f"<b>Price:</b> ${data['price']:.2f}\n"
-        f"<b>Stock Added:</b> {len(stock_items)} items",
+        f"<b>Stock Items Added:</b> {len(stock_items)}",
         reply_markup=kb
     )
+
+# --- Broadcast Flow ---
+@router.callback_query(F.data == "admin_broadcast")
+async def cb_admin_broadcast(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+    await state.set_state(AdminStates.waiting_for_broadcast_message)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Cancel", callback_data="admin_panel", style="danger")]
+    ])
+    await callback.message.edit_text("<b>📢 Send Broadcast</b>\n\nSend the message (text, photo, etc.) you want to broadcast to all users:", reply_markup=kb)
+    await callback.answer()
+
+@router.message(AdminStates.waiting_for_broadcast_message)
+async def execute_broadcast(message: Message, state: FSMContext):
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+    await state.clear()
+
+    users = await users_col.find({}).to_list(length=100000)
+    sent_count = 0
+    fail_count = 0
+
+    status_msg = await message.answer("📢 Broadcasting message to all users...")
+
+    for user in users:
+        try:
+            await message.send_copy(chat_id=user["user_id"])
+            sent_count += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            fail_count += 1
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
+    ])
+    await status_msg.edit_text(
+        f"<b>📢 Broadcast Completed!</b>\n\n"
+        f"✅ Sent: <code>{sent_count}</code> users\n"
+        f"❌ Failed: <code>{fail_count}</code> users",
+        reply_markup=kb
+    )
+
+# --- See User Activity ---
+@router.callback_query(F.data == "admin_user_activity")
+async def cb_admin_user_activity(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+
+    total_users = await users_col.count_documents({})
+    total_orders = await orders_col.count_documents({})
+    recent_orders = await orders_col.find({}).sort("created_at", -1).to_list(length=5)
+
+    text = (
+        f"<b>👥 User Activity & Stats</b>\n\n"
+        f"👤 Total Registered Users: <code>{total_users}</code>\n"
+        f"📦 Total Orders Completed: <code>{total_orders}</code>\n\n"
+        f"<b>Recent Purchases:</b>\n"
+    )
+    for ord_item in recent_orders:
+        text += f"- User <code>{ord_item['user_id']}</code> bought <b>{ord_item['product_name']}</b> for ${ord_item['price']:.2f}\n"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel", style="danger")]
+    ])
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+# --- Delete Single / Multiple Products ---
+@router.callback_query(F.data == "admin_delete_products")
+async def cb_admin_delete_products(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+
+    products = await products_col.find({}).to_list(length=50)
+    if not products:
+        await callback.answer("No products found to delete.", show_alert=True)
+        return
+
+    buttons = []
+    for p in products:
+        buttons.append([
+            InlineKeyboardButton(text=f"🗑️ Delete: {p['name']} (${p['price']})", callback_data=f"delprod_{str(p['_id'])}", style="danger")
+        ])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel", style="primary")])
+
+    await callback.message.edit_text("<b>🗑️ Select a product to delete:</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("delprod_"))
+async def cb_confirm_delete_product(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+    from bson.objectid import ObjectId
+    prod_id = callback.data.split("delprod_")[1]
+
+    try:
+        await products_col.delete_one({"_id": ObjectId(prod_id)})
+        await callback.answer("✅ Product deleted successfully!", show_alert=True)
+        await cb_admin_delete_products(callback)
+    except Exception as e:
+        await callback.answer(f"Error: {e}", show_alert=True)
+
+# --- Delete Entire Database ---
+@router.callback_query(F.data == "admin_delete_db")
+async def cb_admin_delete_db_prompt(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚠️ YES, DELETE EVERYTHING", callback_data="confirm_del_db", style="danger")],
+        [InlineKeyboardButton(text="❌ Cancel", callback_data="admin_panel", style="primary")]
+    ])
+    await callback.message.edit_text(
+        "<b>⚠️ DANGER ZONE: Delete Entire Database</b>\n\n"
+        "This will permanently wipe all users, products, categories, orders, and transactions.\n"
+        "Are you absolutely sure?",
+        reply_markup=kb
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "confirm_del_db")
+async def cb_confirm_delete_db(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Unauthorized!", show_alert=True)
+        return
+
+    await users_col.delete_many({})
+    await products_col.delete_many({})
+    await orders_col.delete_many({})
+    await transactions_col.delete_many({})
+    await categories_col.delete_many({})
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
+    ])
+    await callback.message.edit_text("<b>⚠️ Entire database has been successfully wiped and reset.</b>", reply_markup=kb)
+    await callback.answer("Database cleared!")
 
 # -------------------------------------------------------------------
 # Startup & Webserver Setup
