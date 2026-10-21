@@ -203,7 +203,7 @@ async def cb_profile(callback: CallbackQuery):
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🟠 Add Funds / Wallet", callback_data="wallet")],
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -217,8 +217,8 @@ async def cb_wallet(callback: CallbackQuery):
         f"Deposit funds instantly via cryptocurrency (OxaPay auto-verification)."
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Deposit Funds", callback_data="deposit")],
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+        [InlineKeyboardButton(text="💳 Deposit Funds", callback_data="deposit", style="success")],
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -231,7 +231,7 @@ async def cb_support(callback: CallbackQuery):
         f"Contact our support team: <b>@OneWayStoreSupport</b>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -244,7 +244,7 @@ async def cb_developer(callback: CallbackQuery):
         f"Powered by Python, Aiogram & MongoDB."
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -260,7 +260,7 @@ async def cb_shop(callback: CallbackQuery):
 
     if not categories:
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+            [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
         ])
         await callback.message.edit_text("<b>🛒 Store Catalogue</b>\n\nNo categories or products available right now. Check back soon!", reply_markup=kb)
         await callback.answer()
@@ -269,9 +269,9 @@ async def cb_shop(callback: CallbackQuery):
     buttons = []
     for cat in categories:
         buttons.append([
-            InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"cat_{cat}")
+            InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"cat_{cat}", style="primary")
         ])
-    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="danger")])
 
     text = (
         "<b>🛒 One Way Store Product Catalogue</b>\n\n"
@@ -297,9 +297,9 @@ async def cb_category(callback: CallbackQuery):
         stock_count = len(p.get("stock", []))
         btn_text = f"📦 {p['name']} - ${p['price']:.2f} ({stock_count} in stock)"
         buttons.append([
-            InlineKeyboardButton(text=btn_text, callback_data=f"prod_{str(p['_id'])}")
+            InlineKeyboardButton(text=btn_text, callback_data=f"prod_{str(p['_id'])}", style="primary")
         ])
-    buttons.append([InlineKeyboardButton(text="🔙 Back to Store", callback_data="shop")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back to Store", callback_data="shop", style="danger")])
 
     await callback.message.edit_text(f"<b>📁 Category: {category}</b>\nChoose an item below:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
@@ -332,9 +332,9 @@ async def cb_product_view(callback: CallbackQuery):
     buttons = []
     if stock_count > 0:
         buttons.append([
-            InlineKeyboardButton(text=f"🛒 Buy Now (${product['price']:.2f})", callback_data=f"buy_{str(product['_id'])}")
+            InlineKeyboardButton(text=f"🛒 Buy Now (${product['price']:.2f})", callback_data=f"buy_{str(product['_id'])}", style="success")
         ])
-    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data=f"cat_{product['category']}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data=f"cat_{product['category']}", style="danger")])
 
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
@@ -401,10 +401,10 @@ async def cb_buy_product(callback: CallbackQuery):
         f"<b>Item:</b> {product['name']}\n"
         f"<b>Price Paid:</b> ${product['price']:.2f}\n\n"
         f"<b>Your Content / Account Details:</b>\n"
-        f"<code>{item_content}</code>"
+        f"{item_content}"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🛒 Return to Store", callback_data="shop")]
+        [InlineKeyboardButton(text="🛒 Return to Store", callback_data="shop", style="success")]
     ])
     await callback.message.edit_text(success_text, reply_markup=kb)
     await callback.answer("Purchase complete!")
@@ -416,7 +416,7 @@ async def cb_my_orders(callback: CallbackQuery):
 
     if not orders:
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+            [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
         ])
         await callback.message.edit_text("<b>🛍️ You have no order history yet.</b>", reply_markup=kb)
         await callback.answer()
@@ -428,12 +428,12 @@ async def cb_my_orders(callback: CallbackQuery):
         text += (
             f"<b>{idx}. {order['product_name']}</b> - ${order['price']:.2f}\n"
             f"📅 Date: {date_str}\n"
-            f"🔑 Content: <code>{order['content']}</code>\n"
+            f"🔑 Content:\n{order['content']}\n"
             f"----------------------------------------\n"
         )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -449,7 +449,7 @@ async def cb_deposit(callback: CallbackQuery, state: FSMContext):
         f"Please enter the amount in USD you want to deposit (e.g. <code>10</code> or <code>25.50</code>):"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Cancel", callback_data="wallet")]
+        [InlineKeyboardButton(text="❌ Cancel", callback_data="wallet", style="danger")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -504,9 +504,9 @@ async def process_deposit_amount(message: Message, state: FSMContext):
         })
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Pay Now", url=pay_url)],
-            [InlineKeyboardButton(text="🔄 Check Payment", callback_data=f"check_pay_{track_id}")],
-            [InlineKeyboardButton(text="🔙 Back to Wallet", callback_data="wallet")]
+            [InlineKeyboardButton(text="💳 Pay Now", url=pay_url, style="success")],
+            [InlineKeyboardButton(text="🔄 Check Payment", callback_data=f"check_pay_{track_id}", style="primary")],
+            [InlineKeyboardButton(text="🔙 Back to Wallet", callback_data="wallet", style="danger")]
         ])
         await message.answer(
             f"<b>📄 Payment Invoice Created!</b>\n\n"
@@ -568,7 +568,7 @@ async def cb_check_payment(callback: CallbackQuery):
         await callback.message.edit_text(
             f"<b>✅ Payment Verified Successfully!</b>\n\nYour wallet has been credited with <b>${float(tx['amount']):.2f}</b>.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🛒 Go to Store", callback_data="shop")]
+                [InlineKeyboardButton(text="🛒 Go to Store", callback_data="shop", style="success")]
             ])
         )
         await callback.answer("Payment confirmed!")
@@ -623,13 +623,13 @@ async def cb_admin_panel(callback: CallbackQuery):
 
     text = "<b>⚡ Admin Control Panel</b>\nManage store categories, products, stock, broadcast, and database."
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📁 Add Category", callback_data="admin_add_category"),
-         InlineKeyboardButton(text="➕ Add Product", callback_data="admin_add_product")],
-        [InlineKeyboardButton(text="📢 All User Broadcast", callback_data="admin_broadcast"),
-         InlineKeyboardButton(text="👥 See User Activity", callback_data="admin_user_activity")],
-        [InlineKeyboardButton(text="🗑️ Delete Products", callback_data="admin_delete_products"),
-         InlineKeyboardButton(text="⚠️ Delete Database", callback_data="admin_delete_db")],
-        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu")]
+        [InlineKeyboardButton(text="📁 Add Category", callback_data="admin_add_category", style="primary"),
+         InlineKeyboardButton(text="➕ Add Product", callback_data="admin_add_product", style="success")],
+        [InlineKeyboardButton(text="📢 All User Broadcast", callback_data="admin_broadcast", style="primary"),
+         InlineKeyboardButton(text="👥 See User Activity", callback_data="admin_user_activity", style="primary")],
+        [InlineKeyboardButton(text="🗑️ Delete Products", callback_data="admin_delete_products", style="danger"),
+         InlineKeyboardButton(text="⚠️ Delete Database", callback_data="admin_delete_db", style="danger")],
+        [InlineKeyboardButton(text="🔙 Back", callback_data="main_menu", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -657,7 +657,7 @@ async def process_admin_category_name(message: Message, state: FSMContext):
         upsert=True
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
     ])
     await message.answer(f"<b>✅ Category '{cat_name}' added successfully!</b>", reply_markup=kb)
 
@@ -678,8 +678,8 @@ async def cb_admin_add_product(callback: CallbackQuery):
 
     buttons = []
     for cat in categories:
-        buttons.append([InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"admcat_{cat}")])
-    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel")])
+        buttons.append([InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"admcat_{cat}", style="primary")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel", style="danger")])
 
     await callback.message.edit_text("<b>Select the category where you want to add the product:</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
@@ -717,14 +717,20 @@ async def process_admin_product_price(message: Message, state: FSMContext):
 
     await state.update_data(price=price)
     await state.set_state(AdminStates.waiting_for_product_stock)
-    await message.answer("<b>Now enter stock / details (one item per line). This will be given to the user after successful payment:</b>")
+    await message.answer("<b>Now enter full stock details/paragraph. This will be given to the user as one complete stock item after successful payment:</b>")
 
 @router.message(AdminStates.waiting_for_product_stock)
 async def process_admin_product_stock(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         return
 
-    stock_items = [line.strip() for line in message.text.split("\n") if line.strip()]
+    # Treat the entire message text as a single stock entry (paragraph type)
+    stock_paragraph = message.text.strip()
+    if not stock_paragraph:
+        await message.answer("Stock details cannot be empty. Please send the product details/paragraph:")
+        return
+
+    stock_items = [stock_paragraph]
     data = await state.get_data()
     await state.clear()
 
@@ -738,7 +744,7 @@ async def process_admin_product_stock(message: Message, state: FSMContext):
     await products_col.insert_one(product_doc)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
     ])
     await message.answer(
         f"<b>✅ Product Added Successfully!</b>\n\n"
@@ -757,7 +763,7 @@ async def cb_admin_broadcast(callback: CallbackQuery, state: FSMContext):
         return
     await state.set_state(AdminStates.waiting_for_broadcast_message)
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Cancel", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="❌ Cancel", callback_data="admin_panel", style="danger")]
     ])
     await callback.message.edit_text("<b>📢 Send Broadcast</b>\n\nSend the message (text, photo, etc.) you want to broadcast to all users:", reply_markup=kb)
     await callback.answer()
@@ -783,7 +789,7 @@ async def execute_broadcast(message: Message, state: FSMContext):
             fail_count += 1
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
     ])
     await status_msg.edit_text(
         f"<b>📢 Broadcast Completed!</b>\n\n"
@@ -813,7 +819,7 @@ async def cb_admin_user_activity(callback: CallbackQuery):
         text += f"- User <code>{ord_item['user_id']}</code> bought <b>{ord_item['product_name']}</b> for ${ord_item['price']:.2f}\n"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel", style="primary")]
     ])
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -833,9 +839,9 @@ async def cb_admin_delete_products(callback: CallbackQuery):
     buttons = []
     for p in products:
         buttons.append([
-            InlineKeyboardButton(text=f"🗑️ Delete: {p['name']} (${p['price']})", callback_data=f"delprod_{str(p['_id'])}")
+            InlineKeyboardButton(text=f"🗑️ Delete: {p['name']} (${p['price']})", callback_data=f"delprod_{str(p['_id'])}", style="danger")
         ])
-    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back", callback_data="admin_panel", style="primary")])
 
     await callback.message.edit_text("<b>🗑️ Select a product to delete:</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
@@ -863,8 +869,8 @@ async def cb_admin_delete_db_prompt(callback: CallbackQuery):
         return
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚠️ YES, DELETE EVERYTHING", callback_data="confirm_del_db")],
-        [InlineKeyboardButton(text="❌ Cancel", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="⚠️ YES, DELETE EVERYTHING", callback_data="confirm_del_db", style="danger")],
+        [InlineKeyboardButton(text="❌ Cancel", callback_data="admin_panel", style="primary")]
     ])
     await callback.message.edit_text(
         "<b>⚠️ DANGER ZONE: Delete Entire Database</b>\n\n"
@@ -887,7 +893,7 @@ async def cb_confirm_delete_db(callback: CallbackQuery):
     await categories_col.delete_many({})
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel")]
+        [InlineKeyboardButton(text="⚡ Admin Panel", callback_data="admin_panel", style="primary")]
     ])
     await callback.message.edit_text("<b>⚠️ Entire database has been successfully wiped and reset.</b>", reply_markup=kb)
     await callback.answer("Database cleared!")
