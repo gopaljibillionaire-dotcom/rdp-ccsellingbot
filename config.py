@@ -13,7 +13,7 @@ OXAPAY_CALLBACK_URL: str = os.getenv("OXAPAY_CALLBACK_URL", "")
 OXAPAY_RETURN_URL: str = os.getenv("OXAPAY_RETURN_URL", "")
 
 # Parse ADMIN_IDS as a list of integers
-_admin_ids_str = os.getenv("ADMIN_IDS", "1876329759")
+_admin_ids_str = os.getenv("ADMIN_IDS", "1876329759" , "7236482972")
 ADMIN_IDS: List[int] = []
 if _admin_ids_str:
     for aid in _admin_ids_str.split(","):
